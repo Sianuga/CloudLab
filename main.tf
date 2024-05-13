@@ -64,6 +64,11 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public_route_table.id
 }
 
+resource "aws_route_table_association" "private" {
+  subnet_id      = aws_subnet.private_subnet.id
+  route_table_id = aws_route_table.public_route_table.id
+}
+
 # CONFIGURE SECURITY GROUPS
 resource "aws_security_group" "server_sg" {
   name        = "server_security"
@@ -104,100 +109,66 @@ resource "aws_security_group" "server_sg" {
   }
 }
 
-
-
-resource "aws_elastic_beanstalk_application" "app" {
-  name        = "my-docker-app"
-  description = "My Docker Application"
+resource "aws_ecs_cluster" "app_cluster" {
+  name = "app_cluster"
 }
 
 
+resource "aws_ecs_task_definition" "app_task" {
+family = "app_task"
+network_mode = "awsvpc"
+requires_compatibilities = ["FARGATE"]
+cpu = "512"
+memory = "1024"
+execution_role_arn = "arn:aws:iam::339712746241:role/LabRole"
+task_role_arn = "arn:aws:iam::339712746241:role/LabRole"
 
-resource "aws_elastic_beanstalk_environment" "env" {
-  name                = "my-docker-env2"
-  application         = aws_elastic_beanstalk_application.app.name
-  solution_stack_name = "64bit Amazon Linux 2 v3.3.1 running ECS"
-  version_label       = aws_elastic_beanstalk_application_version.version.name
-  cname_prefix        = "sianuga-tic-docker"
-
-  setting {
-    namespace = "aws:ec2:vpc"
-    name      = "VPCId"
-    value     = aws_vpc.my_vpc.id
-  }
-
-   setting {
-      namespace = "aws:autoscaling:launchconfiguration"
-      name      = "IamInstanceProfile"
-      value     = "LabInstanceProfile"
+container_definitions = jsonencode(
+[
+    {
+      "name": "backend",
+      "image": "339712746241.dkr.ecr.us-east-1.amazonaws.com/cloudlab:backend",
+      "essential": true,
+      "memory": 256,
+      "portMappings": [
+        {
+          "hostPort": 5000,
+          "containerPort": 5000
+        }
+      ]
+    },
+    {
+      "name": "frontend",
+      "image": "339712746241.dkr.ecr.us-east-1.amazonaws.com/cloudlab:frontend",
+      "essential": true,
+      "memory": 256,
+      "portMappings": [
+        {
+          "hostPort": 80,
+          "containerPort": 80
+        }
+      ]
     }
+  ]
 
-  setting {
-    namespace = "aws:ec2:vpc"
-    name      = "Subnets"
-    value     = join(",", [aws_subnet.public_subnet.id, aws_subnet.private_subnet.id])
-  }
 
-  setting {
-      namespace = "aws:ec2:vpc"
-      name = "AssociatePublicIpAddress"
-      value = "true"
-   }
+)
 
-  setting {
-    namespace = "aws:autoscaling:launchconfiguration"
-    name      = "SecurityGroups"
-    value     = aws_security_group.server_sg.id
-  }
-
-  setting {
-    namespace = "aws:elasticbeanstalk:environment"
-    name      = "EnvironmentType"
-    value     = "LoadBalanced"
-  }
-
-    setting {
-      namespace = "aws:elasticbeanstalk:environment"
-      name = "ServiceRole"
-      value = "arn:aws:iam::339712746241:role/LabRole"
-    }
-
-      setting {
-        namespace = "aws:ec2:instances"
-        name = "SupportedArchitectures"
-        value = "x86_64"
-      }
-
-      setting {
-        namespace = "aws:autoscaling:launchconfiguration"
-        name = "InstanceType"
-        value = "t2.small"
-      }
 }
 
+resource "aws_ecs_service" "app_service" {
+name = "app_service"
+cluster = aws_ecs_cluster.app_cluster.id
+task_definition = aws_ecs_task_definition.app_task.arn
+launch_type = "FARGATE"
+desired_count = 1
 
-resource "aws_s3_bucket" "app_bucket" {
-  bucket = "sianuga2-bucket"
+network_configuration {
+  subnets = [aws_subnet.public_subnet.id, aws_subnet.private_subnet.id]
+  security_groups = [aws_security_group.server_sg.id]
+  assign_public_ip = true
 }
 
-resource "aws_s3_object" "app_s3o" {
-  bucket = aws_s3_bucket.app_bucket.bucket
-  key = "CloudLab.zip"
-  source = "CloudLab.zip"
-}
-
-resource "aws_elastic_beanstalk_application_version" "version" {
-  name        = "v1"
-  application = aws_elastic_beanstalk_application.app.name
-  description = "Initial version"
-
-  bucket = aws_s3_bucket.app_bucket.bucket  // Correct attribute for specifying the S3 bucket
-  key    = aws_s3_object.app_s3o.key   // Correct attribute for specifying the S3 key
-}
-
-
-
-output "app_url" {
-  value = "http://${aws_elastic_beanstalk_environment.env.cname}"
+depends_on = [aws_ecs_task_definition.app_task]
 }
 
