@@ -1,7 +1,7 @@
 let currentPlayer = '';
 const board = document.querySelector('#board');
 const tiles = board.querySelectorAll('.tile');
-const SERVER_URL = '${server_url}';
+const SERVER_URL = "http://localhost:5000";
 let playerID = '';
 
 function joinGame() {

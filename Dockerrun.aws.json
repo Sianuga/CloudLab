@@ -1,0 +1,55 @@
+{
+  "AWSEBDockerrunVersion": "2",
+  "containerDefinitions": [
+    {
+      "name": "backend",
+      "image": "yourusername/backend",
+      "essential": true,
+      "memory": 256,
+      "mountPoints": [
+        {
+          "sourceVolume": "backend-src",
+          "containerPath": "/app"
+        }
+      ],
+      "portMappings": [
+        {
+          "hostPort": 5000,
+          "containerPort": 5000
+        }
+      ]
+    },
+    {
+      "name": "frontend",
+      "image": "yourusername/frontend",
+      "essential": true,
+      "memory": 256,
+      "mountPoints": [
+        {
+          "sourceVolume": "frontend-src",
+          "containerPath": "/usr/share/nginx/html"
+        }
+      ],
+      "portMappings": [
+        {
+          "hostPort": 80,
+          "containerPort": 80
+        }
+      ]
+    }
+  ],
+  "volumes": [
+    {
+      "name": "backend-src",
+      "host": {
+        "sourcePath": "/var/app/current/backend/src"
+      }
+    },
+    {
+      "name": "frontend-src",
+      "host": {
+        "sourcePath": "/var/app/current/frontend/src"
+      }
+    }
+  ]
+}

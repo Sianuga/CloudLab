@@ -17,5 +17,4 @@ services:
       - "./frontend/src:/usr/share/nginx/html"
     ports:
       - "80:80"
-    depends_on:
-      - backend
+

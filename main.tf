@@ -105,69 +105,99 @@ resource "aws_security_group" "server_sg" {
 }
 
 
-# DEPLOY EC2 INSTANCES
-resource "aws_instance" "server" {
-  ami                         = "ami-080e1f13689e07408"
-  instance_type               = "t2.micro"
-  key_name                    = "vockey"
-  subnet_id                   = aws_subnet.public_subnet.id
-  associate_public_ip_address = true
-  vpc_security_group_ids      = [aws_security_group.server_sg.id]
-user_data = <<-EOF
-#!/bin/bash
-  set -e  # Stop script execution on any error
 
-  # Update system and install necessary packages
-  sudo apt-get update
-  sudo apt-get install -y python3 python3-pip nginx git curl
-
-  # Install Python packages required by the backend
-  sudo pip3 install Flask Flask-CORS Flask-Session flask-socketio eventlet
-
-  # Clone the repository
-
-  git clone https://<PAT_HERE>@github.com/pwr-cloudprogramming/a1-Sianuga.git /home/ubuntu/app
-
-  # Backend setup
-  cd /home/ubuntu/app/backend/src
-  sudo chmod +x app.py
-  nohup python3 app.py > /dev/null 2>&1 &
-
-  # Frontend setup
-  sudo mkdir -p /var/www/html
-  sudo cp -r /home/ubuntu/app/frontend/src/* /var/www/html/
-
-  # Replace SERVER_URL in game.js with actual backend IP
-  PUBLIC_IP=$(curl http://169.254.169.254/latest/meta-data/public-ipv4)
-  sudo sed -i "s|const SERVER_URL = '.*';|const SERVER_URL = 'http://"$PUBLIC_IP":5000';|" /var/www/html/game.js
-
-  # Configure Nginx to serve the frontend files
-  echo "server {
-      listen 80;
-      server_name _;
-      root /var/www/html;
-      index index.html index.htm;
-
-      location / {
-          try_files \$uri \$uri/ =404;
-      }
-  }" | sudo tee /etc/nginx/sites-available/default
-
-  sudo ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/
-  sudo systemctl restart nginx
-  sudo systemctl enable nginx
-
-EOF
+resource "aws_elastic_beanstalk_application" "app" {
+  name        = "my-docker-app"
+  description = "My Docker Application"
+}
 
 
-  tags = {
-    Name = "Server"
+
+resource "aws_elastic_beanstalk_environment" "env" {
+  name                = "my-docker-env2"
+  application         = aws_elastic_beanstalk_application.app.name
+  solution_stack_name = "64bit Amazon Linux 2 v3.3.1 running ECS"
+  version_label       = aws_elastic_beanstalk_application_version.version.name
+  cname_prefix        = "sianuga-tic-docker"
+
+  setting {
+    namespace = "aws:ec2:vpc"
+    name      = "VPCId"
+    value     = aws_vpc.my_vpc.id
   }
+
+   setting {
+      namespace = "aws:autoscaling:launchconfiguration"
+      name      = "IamInstanceProfile"
+      value     = "LabInstanceProfile"
+    }
+
+  setting {
+    namespace = "aws:ec2:vpc"
+    name      = "Subnets"
+    value     = join(",", [aws_subnet.public_subnet.id, aws_subnet.private_subnet.id])
+  }
+
+  setting {
+      namespace = "aws:ec2:vpc"
+      name = "AssociatePublicIpAddress"
+      value = "true"
+   }
+
+  setting {
+    namespace = "aws:autoscaling:launchconfiguration"
+    name      = "SecurityGroups"
+    value     = aws_security_group.server_sg.id
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:environment"
+    name      = "EnvironmentType"
+    value     = "LoadBalanced"
+  }
+
+    setting {
+      namespace = "aws:elasticbeanstalk:environment"
+      name = "ServiceRole"
+      value = "arn:aws:iam::339712746241:role/LabRole"
+    }
+
+      setting {
+        namespace = "aws:ec2:instances"
+        name = "SupportedArchitectures"
+        value = "x86_64"
+      }
+
+      setting {
+        namespace = "aws:autoscaling:launchconfiguration"
+        name = "InstanceType"
+        value = "t2.small"
+      }
 }
 
-# OUTPUT IP ADDRESSES
-output "server_public_ip" {
-  value = aws_instance.server.public_ip
+
+resource "aws_s3_bucket" "app_bucket" {
+  bucket = "sianuga2-bucket"
 }
 
+resource "aws_s3_object" "app_s3o" {
+  bucket = aws_s3_bucket.app_bucket.bucket
+  key = "CloudLab.zip"
+  source = "CloudLab.zip"
+}
+
+resource "aws_elastic_beanstalk_application_version" "version" {
+  name        = "v1"
+  application = aws_elastic_beanstalk_application.app.name
+  description = "Initial version"
+
+  bucket = aws_s3_bucket.app_bucket.bucket  // Correct attribute for specifying the S3 bucket
+  key    = aws_s3_object.app_s3o.key   // Correct attribute for specifying the S3 key
+}
+
+
+
+output "app_url" {
+  value = "http://${aws_elastic_beanstalk_environment.env.cname}"
+}
 
