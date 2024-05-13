@@ -1,7 +1,6 @@
 #!/bin/sh
 # Fetch the public IP address from AWS metadata
-#PUBLIC_IP=$(curl http://169.254.169.254/latest/meta-data/public-ipv4)
-PUBLIC_IP="localhost"
+PUBLIC_IP=$(curl http://169.254.169.254/latest/meta-data/public-ipv4)
 
 cat /usr/share/nginx/html/game.js  # Before modification
 # Replace the SERVER_URL placeholder in the game.js

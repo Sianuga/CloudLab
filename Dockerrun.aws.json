@@ -3,15 +3,9 @@
   "containerDefinitions": [
     {
       "name": "backend",
-      "image": "yourusername/backend",
+      "image": "339712746241.dkr.ecr.us-east-1.amazonaws.com/cloudlab:backend",
       "essential": true,
       "memory": 256,
-      "mountPoints": [
-        {
-          "sourceVolume": "backend-src",
-          "containerPath": "/app"
-        }
-      ],
       "portMappings": [
         {
           "hostPort": 5000,
@@ -21,15 +15,9 @@
     },
     {
       "name": "frontend",
-      "image": "yourusername/frontend",
+      "image": "339712746241.dkr.ecr.us-east-1.amazonaws.com/cloudlab:frontend",
       "essential": true,
       "memory": 256,
-      "mountPoints": [
-        {
-          "sourceVolume": "frontend-src",
-          "containerPath": "/usr/share/nginx/html"
-        }
-      ],
       "portMappings": [
         {
           "hostPort": 80,
@@ -37,19 +25,6 @@
         }
       ]
     }
-  ],
-  "volumes": [
-    {
-      "name": "backend-src",
-      "host": {
-        "sourcePath": "/var/app/current/backend/src"
-      }
-    },
-    {
-      "name": "frontend-src",
-      "host": {
-        "sourcePath": "/var/app/current/frontend/src"
-      }
-    }
   ]
+
 }
